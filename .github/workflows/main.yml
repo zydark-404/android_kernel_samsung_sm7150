@@ -14,20 +14,41 @@ jobs:
       - name: Set up Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libncurses-dev git zip unzip wget ccache libelf-dev clang lld llvm
+          sudo apt-get install -y \
+            build-essential bc bison flex \
+            libssl-dev libncurses5-dev libncurses-dev \
+            git zip unzip wget ccache \
+            libelf-dev clang lld llvm \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            python3 python-is-python3 libtinfo5
 
       - name: Download Proton Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
 
-      - name: Download kptools (APatch CLI)
+      - name: Download KernelPatch Tools
         run: |
-          wget https://github.com/bmax121/APatch/releases/download/v10763/kptools-linux-x86_64 -O kptools
+          # 下载 kptools 和 kpimg（缺一不可）
+          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kptools-linux-x86_64 -O kptools
+          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kpimg-android -O kpimg
           chmod +x kptools
 
       - name: Download AnyKernel3 Template
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+      - name: Configure APatch Kernel Requirements
+        run: |
+          # 在 defconfig 中追加 APatch 必需的配置项
+          cat >> arch/arm64/configs/a71_eur_open_defconfig << 'EOF'
+          CONFIG_KALLSYMS=y
+          CONFIG_KALLSYMS_ALL=y
+          CONFIG_KPROBES=y
+          CONFIG_KPROBES_ON_FTRACE=y
+          CONFIG_PROC_KCORE=y
+          CONFIG_DEBUG_FS=y
+          CONFIG_FRAME_POINTER=y
+          EOF
 
       - name: Compile Kernel
         run: |
@@ -36,24 +57,40 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          export CC=clang
-          export AR=llvm-ar
-          export NM=llvm-nm
-          export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
 
           make O=out a71_eur_open_defconfig
-          make -j$(nproc) O=out
+          make -j$(nproc) O=out CC=clang KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
 
-      - name: Inject APatch KernelPatch (kptools)
+      - name: Locate Compiled Kernel Image
+        id: find_image
         run: |
-          ./kptools -p -i out/arch/arm64/boot/Image.gz-dtb -S youssa@31 -o Image.gz-dtb-patched
+          # 自动检测实际生成的内核镜像文件名（可能是 Image.gz-dtb 或 Image.gz）
+          for f in out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz; do
+            if [ -f "$f" ]; then
+              echo "kernel_path=$f" >> $GITHUB_OUTPUT
+              echo "kernel_name=$(basename $f)" >> $GITHUB_OUTPUT
+              echo "Found: $f"
+              exit 0
+            fi
+          done
+          echo "Error: No kernel image found"
+          ls -la out/arch/arm64/boot/ 2>/dev/null || echo "boot dir not found"
+          exit 1
+
+      - name: Inject KernelPatch (kptools)
+        run: |
+          # 使用与 KernelPatch 版本匹配的 kpimg
+          ./kptools -p \
+            --image ${{ steps.find_image.outputs.kernel_path }} \
+            --skey "YOUR_SECURE_KEY_HERE" \
+            --kpimg kpimg \
+            --out Image-patched
 
       - name: Package with AnyKernel3
         run: |
-          cp Image.gz-dtb-patched AnyKernel3/OneUI-New-Image.gz-dtb
+          cp Image-patched AnyKernel3/${{ steps.find_image.outputs.kernel_name }}
           cd AnyKernel3
+          # 注意：你仍需手动修改 anykernel.sh 中的 BLOCK 参数为 A71 的实际 boot 分区
           zip -r9 ../A71_Kernel_APatch_Patched.zip *
 
       - name: Upload Kernel Zip Artifact

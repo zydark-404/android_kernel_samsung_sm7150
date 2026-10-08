@@ -22,7 +22,7 @@ jobs:
 
       - name: Download AOSP Clang Toolchain (r383902)
         run: |
-          mkdir clang
+          mkdir -p clang
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-release/clang-r383902.tar.gz
           tar -xf clang-r383902.tar.gz -C clang
           rm clang-r383902.tar.gz
@@ -38,9 +38,15 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          export CLANG_TRIPLE=aarch64-linux-gnu-
 
-          make O=out a71_eur_open_defconfig
+          # البحث المباشر عن ملف defconfig المتوافق وتطبيقه
+          DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a71*" -o -name "*7150*" | head -n 1 | xargs basename)
+          if [ -z "$DEFCONFIG_FILE" ]; then
+            DEFCONFIG_FILE="a71_eur_open_defconfig"
+          fi
+          echo "Using Defconfig: $DEFCONFIG_FILE"
+
+          make O=out $DEFCONFIG_FILE
           
           # تفعيل KernelSU واضافة اسم ZYDARK
           echo "CONFIG_KSU=y" >> out/.config
@@ -53,7 +59,7 @@ jobs:
 
       - name: Package with AnyKernel3
         run: |
-          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/OneUI-New-Image.gz-dtb
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/OneUI-New-Image.gz-dtb || cp out/arch/arm64/boot/Image.gz AnyKernel3/OneUI-New-Image.gz-dtb
           cd AnyKernel3
           zip -r9 ../A71_Kernel_ZYDARK_KSU.zip *
 

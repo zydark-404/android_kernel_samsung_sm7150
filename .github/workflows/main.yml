@@ -38,16 +38,18 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CLANG_TRIPLE=aarch64-linux-gnu-
 
           make O=out a71_eur_open_defconfig
           
-          # تفعيل KernelSU في إعدادات الكيرنل
+          # تفعيل KernelSU واضافة اسم ZYDARK
           echo "CONFIG_KSU=y" >> out/.config
-          
-          # تخصيص اسم الكيرنل بـ ZYDARK
           echo 'CONFIG_LOCALVERSION="-ZYDARK-KSU"' >> out/.config
 
-          make -j$(nproc) O=out CC=clang HOSTCC=gcc KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
+          make -j$(nproc) O=out \
+            CC=$(pwd)/clang/bin/clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
 
       - name: Package with AnyKernel3
         run: |

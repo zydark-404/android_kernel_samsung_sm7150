@@ -1,4 +1,4 @@
-name: Build Kernel for Samsung A71 with KernelSU
+name: Build Custom Kernel with Integrated APatch
 
 on:
   workflow_dispatch:
@@ -16,10 +16,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libncurses-dev git zip unzip wget ccache libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Integrate KernelSU v0.9.5
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-
       - name: Download AOSP Clang Toolchain (r383902)
         run: |
           mkdir -p clang
@@ -27,11 +23,18 @@ jobs:
           tar -xf clang-r383902.tar.gz -C clang
           rm clang-r383902.tar.gz
 
+      - name: Integrate KernelPatch (APatch Core)
+        run: |
+          git clone --depth=1 https://github.com/bmax121/KernelPatch.git kernelpatch
+          if ! grep -q "kernelpatch" Makefile; then
+            echo "obj-y += kernelpatch/" >> Makefile
+          fi
+
       - name: Download AnyKernel3 Template
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-      - name: Compile Kernel with KernelSU & Custom Name ZYDARK
+      - name: Compile Kernel with APatch & ZYDARK Signature
         run: |
           export PATH="$(pwd)/clang/bin:$PATH"
           export ARCH=arm64
@@ -39,7 +42,7 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
-          # البحث المباشر عن ملف defconfig المتوافق وتطبيقه
+          # البحث عن ملف defconfig المناسب
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a71*" -o -name "*7150*" | head -n 1 | xargs basename)
           if [ -z "$DEFCONFIG_FILE" ]; then
             DEFCONFIG_FILE="a71_eur_open_defconfig"
@@ -47,10 +50,13 @@ jobs:
           echo "Using Defconfig: $DEFCONFIG_FILE"
 
           make O=out $DEFCONFIG_FILE
+
+          # تفعيل متطلبات APatch الكامله
+          echo "CONFIG_KALLSYMS=y" >> out/.config
+          echo "CONFIG_KALLSYMS_ALL=y" >> out/.config
           
-          # تفعيل KernelSU واضافة اسم ZYDARK
-          echo "CONFIG_KSU=y" >> out/.config
-          echo 'CONFIG_LOCALVERSION="-ZYDARK-KSU"' >> out/.config
+          # إدراج التوقيع المخصص
+          echo 'CONFIG_LOCALVERSION="-ZYDARK-APatch"' >> out/.config
 
           make -j$(nproc) O=out \
             CC=$(pwd)/clang/bin/clang \
@@ -61,10 +67,10 @@ jobs:
         run: |
           cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/OneUI-New-Image.gz-dtb || cp out/arch/arm64/boot/Image.gz AnyKernel3/OneUI-New-Image.gz-dtb
           cd AnyKernel3
-          zip -r9 ../A71_Kernel_ZYDARK_KSU.zip *
+          zip -r9 ../A71_Kernel_ZYDARK_APatch.zip *
 
       - name: Upload Kernel Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A71-Kernel-ZYDARK-KSU-OneUI
-          path: A71_Kernel_ZYDARK_KSU.zip
+          name: A71-Kernel-ZYDARK-APatch-Custom
+          path: A71_Kernel_ZYDARK_APatch.zip

@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Source Code
@@ -28,9 +28,9 @@ jobs:
 
       - name: Download KernelPatch Tools
         run: |
-          # 下载 kptools 和 kpimg（缺一不可）
-          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kptools-linux-x86_64 -O kptools
-          wget https://github.com/bmax121/KernelPatch/releases/latest/download/kpimg-android -O kpimg
+          # 使用 0.13.8，修复了 pre-6.x 内核的启动问题
+          wget https://github.com/bmax121/KernelPatch/releases/download/0.13.8/kptools-linux-x86_64 -O kptools
+          wget https://github.com/bmax121/KernelPatch/releases/download/0.13.8/kpimg-android -O kpimg
           chmod +x kptools
 
       - name: Download AnyKernel3 Template
@@ -64,7 +64,6 @@ jobs:
       - name: Locate Compiled Kernel Image
         id: find_image
         run: |
-          # 自动检测实际生成的内核镜像文件名（可能是 Image.gz-dtb 或 Image.gz）
           for f in out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz; do
             if [ -f "$f" ]; then
               echo "kernel_path=$f" >> $GITHUB_OUTPUT
@@ -74,23 +73,26 @@ jobs:
             fi
           done
           echo "Error: No kernel image found"
-          ls -la out/arch/arm64/boot/ 2>/dev/null || echo "boot dir not found"
           exit 1
 
       - name: Inject KernelPatch (kptools)
         run: |
-          # 使用与 KernelPatch 版本匹配的 kpimg
           ./kptools -p \
             --image ${{ steps.find_image.outputs.kernel_path }} \
             --skey "YOUR_SECURE_KEY_HERE" \
             --kpimg kpimg \
             --out Image-patched
+          
+          if [ ! -f Image-patched ]; then
+            echo "kptools failed. Exit code: $?"
+            exit 1
+          fi
 
       - name: Package with AnyKernel3
         run: |
           cp Image-patched AnyKernel3/${{ steps.find_image.outputs.kernel_name }}
           cd AnyKernel3
-          # 注意：你仍需手动修改 anykernel.sh 中的 BLOCK 参数为 A71 的实际 boot 分区
+          # 必须先手动修改 anykernel.sh 中的 BLOCK 参数为 A71 的实际 boot 分区
           zip -r9 ../A71_Kernel_APatch_Patched.zip *
 
       - name: Upload Kernel Zip Artifact

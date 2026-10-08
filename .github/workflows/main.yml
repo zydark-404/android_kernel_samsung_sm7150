@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Source Code
@@ -16,13 +16,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libncurses-dev git zip unzip wget ccache libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Download Proton Clang Toolchain
-        run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-
-      - name: Integrate KernelSU v0.9.5 (Stable for 4.14)
+      - name: Integrate KernelSU v0.9.5
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+      - name: Download AOSP Clang Toolchain (r383902)
+        run: |
+          mkdir clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-release/clang-r383902.tar.gz
+          tar -xf clang-r383902.tar.gz -C clang
+          rm clang-r383902.tar.gz
 
       - name: Download AnyKernel3 Template
         run: |
@@ -44,7 +47,7 @@ jobs:
           # تخصيص اسم الكيرنل بـ ZYDARK
           echo 'CONFIG_LOCALVERSION="-ZYDARK-KSU"' >> out/.config
 
-          make -j$(nproc) O=out CC=clang KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
+          make -j$(nproc) O=out CC=clang HOSTCC=gcc KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
 
       - name: Package with AnyKernel3
         run: |

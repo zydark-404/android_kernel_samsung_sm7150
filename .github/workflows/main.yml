@@ -15,7 +15,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses-dev git zip unzip wget ccache
-          
+
       - name: Download Proton Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
@@ -36,14 +36,12 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          
-          # إعداد الملف للروم الرسمي One UI
+
           make O=out a71_eur_open_defconfig
           make -j$(nproc) O=out CC=clang
 
       - name: Inject APatch KernelPatch (kptools)
         run: |
-          # حقن الـ APatch بالسوبركاي الخاص بك
           ./kptools -p -i out/arch/arm64/boot/Image.gz-dtb -S youssa@31 -o Image.gz-dtb-patched
 
       - name: Package with AnyKernel3
@@ -53,7 +51,7 @@ jobs:
           zip -r9 ../A71_Kernel_APatch_Patched.zip *
 
       - name: Upload Kernel Zip Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: A71-Kernel-APatch-OneUI
           path: A71_Kernel_APatch_Patched.zip

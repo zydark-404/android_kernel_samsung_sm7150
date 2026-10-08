@@ -16,19 +16,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libncurses-dev git zip unzip wget ccache libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Integrate Latest Stable KernelSU
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
-
       - name: Download Proton Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+
+      - name: Integrate KernelSU v0.9.5 (Stable for 4.14)
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Download AnyKernel3 Template
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-      - name: Compile Kernel with KernelSU
+      - name: Compile Kernel with KernelSU & Custom Name ZYDARK
         run: |
           export PATH="$(pwd)/clang/bin:$PATH"
           export ARCH=arm64
@@ -38,8 +38,11 @@ jobs:
 
           make O=out a71_eur_open_defconfig
           
-          # تفعيل KernelSU داخل الإعدادات
+          # تفعيل KernelSU في إعدادات الكيرنل
           echo "CONFIG_KSU=y" >> out/.config
+          
+          # تخصيص اسم الكيرنل بـ ZYDARK
+          echo 'CONFIG_LOCALVERSION="-ZYDARK-KSU"' >> out/.config
 
           make -j$(nproc) O=out CC=clang KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
 
@@ -47,10 +50,10 @@ jobs:
         run: |
           cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/OneUI-New-Image.gz-dtb
           cd AnyKernel3
-          zip -r9 ../A71_Kernel_KSU_Patched.zip *
+          zip -r9 ../A71_Kernel_ZYDARK_KSU.zip *
 
       - name: Upload Kernel Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A71-Kernel-KSU-OneUI
-          path: A71_Kernel_KSU_Patched.zip
+          name: A71-Kernel-ZYDARK-KSU-OneUI
+          path: A71_Kernel_ZYDARK_KSU.zip

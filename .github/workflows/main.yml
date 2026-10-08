@@ -13,14 +13,19 @@ jobs:
 
       - name: Set up Build Environment
         run: |
-          sudo apt-get update
+          sudo apt-get update -o Acquire::Retries=3
           sudo apt-get install -y \
             build-essential bc bison flex \
             libssl-dev libncurses5-dev libncurses-dev \
             git zip unzip wget ccache \
             libelf-dev clang lld llvm \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            python3 python-is-python3 libtinfo5
+            python3 python-is-python3
+
+          # libtinfo5 在 Ubuntu 24.04 中不可直接安装，手动下载 deb
+          wget http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.4-2_amd64.deb
+          sudo dpkg -i libtinfo5_6.4-2_amd64.deb
+          rm -f libtinfo5_6.4-2_amd64.deb
 
       - name: Download Proton Clang Toolchain
         run: |
@@ -28,7 +33,6 @@ jobs:
 
       - name: Download KernelPatch Tools
         run: |
-          # 使用 0.13.8，修复了 pre-6.x 内核的启动问题
           wget https://github.com/bmax121/KernelPatch/releases/download/0.13.8/kptools-linux-x86_64 -O kptools
           wget https://github.com/bmax121/KernelPatch/releases/download/0.13.8/kpimg-android -O kpimg
           chmod +x kptools
@@ -39,7 +43,6 @@ jobs:
 
       - name: Configure APatch Kernel Requirements
         run: |
-          # 在 defconfig 中追加 APatch 必需的配置项
           cat >> arch/arm64/configs/a71_eur_open_defconfig << 'EOF'
           CONFIG_KALLSYMS=y
           CONFIG_KALLSYMS_ALL=y
@@ -79,12 +82,12 @@ jobs:
         run: |
           ./kptools -p \
             --image ${{ steps.find_image.outputs.kernel_path }} \
-            --skey "YOUR_SECURE_KEY_HERE" \
+            --skey "YOUR_STRONG_KEY_HERE" \
             --kpimg kpimg \
             --out Image-patched
-          
+
           if [ ! -f Image-patched ]; then
-            echo "kptools failed. Exit code: $?"
+            echo "kptools failed"
             exit 1
           fi
 
@@ -92,7 +95,6 @@ jobs:
         run: |
           cp Image-patched AnyKernel3/${{ steps.find_image.outputs.kernel_name }}
           cd AnyKernel3
-          # 必须先手动修改 anykernel.sh 中的 BLOCK 参数为 A71 的实际 boot 分区
           zip -r9 ../A71_Kernel_APatch_Patched.zip *
 
       - name: Upload Kernel Zip Artifact

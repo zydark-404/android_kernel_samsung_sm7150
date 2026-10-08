@@ -1,4 +1,4 @@
-name: Build Kernel for Samsung A71 with APatch
+name: Build Kernel for Samsung A71 with KernelSU
 
 on:
   workflow_dispatch:
@@ -16,20 +16,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libncurses-dev git zip unzip wget ccache libelf-dev clang lld llvm gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
+      - name: Integrate Latest Stable KernelSU
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+
       - name: Download Proton Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-
-      - name: Download kptools (APatch CLI)
-        run: |
-          wget https://github.com/bmax121/APatch/releases/download/v10763/kptools-linux-x86_64 -O kptools
-          chmod +x kptools
 
       - name: Download AnyKernel3 Template
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-      - name: Compile Kernel
+      - name: Compile Kernel with KernelSU
         run: |
           export PATH="$(pwd)/clang/bin:$PATH"
           export ARCH=arm64
@@ -37,24 +36,21 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
-          # تجهيز إعدادات One UI لكيرنل A71
           make O=out a71_eur_open_defconfig
+          
+          # تفعيل KernelSU داخل الإعدادات
+          echo "CONFIG_KSU=y" >> out/.config
 
-          # البناء مع تعطيل إيقاف البناء بسبب التحذيرات المتروكة في سورس سامسونج
           make -j$(nproc) O=out CC=clang KCFLAGS="-Wno-error" HOSTCFLAGS="-Wno-error"
-
-      - name: Inject APatch KernelPatch (kptools)
-        run: |
-          ./kptools -p -i out/arch/arm64/boot/Image.gz-dtb -S youssa@31 -o Image.gz-dtb-patched
 
       - name: Package with AnyKernel3
         run: |
-          cp Image.gz-dtb-patched AnyKernel3/OneUI-New-Image.gz-dtb
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/OneUI-New-Image.gz-dtb
           cd AnyKernel3
-          zip -r9 ../A71_Kernel_APatch_Patched.zip *
+          zip -r9 ../A71_Kernel_KSU_Patched.zip *
 
       - name: Upload Kernel Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A71-Kernel-APatch-OneUI
-          path: A71_Kernel_APatch_Patched.zip
+          name: A71-Kernel-KSU-OneUI
+          path: A71_Kernel_KSU_Patched.zip
